@@ -1,4 +1,4 @@
-module github.com/deflix-tv/imdb2torrent
+module github.com/axutio/imdb2torrent
 
 go 1.15
 
