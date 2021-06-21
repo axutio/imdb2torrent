@@ -245,11 +245,18 @@ func createTVShowSearch(ctx context.Context, metaGetter MetaGetter, imdbID strin
 	if err != nil {
 		return "", fmt.Errorf("Couldn't get TV show title via Cinemeta for ID %v: %v", id, err)
 	}
+
 	seasonString := strconv.Itoa(season)
-	episodeString := strconv.Itoa(episode)
 	if season < 10 {
 		seasonString = "0" + seasonString
 	}
+
+	if episode < 0 {
+		return fmt.Sprintf("%v S%v", meta.Title, seasonString), nil
+	}
+	
+	episodeString := strconv.Itoa(episode)
+
 	if episode < 10 {
 		episodeString = "0" + episodeString
 	}
