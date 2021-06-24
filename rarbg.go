@@ -151,7 +151,6 @@ func (c *rarbgClient) find(ctx context.Context, id, escapedQuery string) ([]Resu
 
 	// `format=json_extended` for size info
 	url := c.baseURL + "/pubapi_v2.php?app_id=deflix&mode=search&sort=seeders&format=json_extended&ranked=0&token=" + c.token + "&" + escapedQuery
-	fmt.Printf("Querying %v\n from RARBG", url)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't create request: %v", err)
@@ -172,8 +171,6 @@ func (c *rarbgClient) find(ctx context.Context, id, escapedQuery string) ([]Resu
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't read response body: %v", err)
 	}
-
-	fmt.Printf("Got back %v\n from RARBG", string(resBody))
 
 	// Extract data from JSON
 	torrents := gjson.GetBytes(resBody, "torrent_results").Array()
