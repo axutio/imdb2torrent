@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,6 +42,7 @@ type rarbgClient struct {
 	baseURL          string
 	httpClient       *http.Client
 	cache            Cache
+	metaGetter		 MetaGetter
 	cacheAge         time.Duration
 	logger           *zap.Logger
 	logFoundTorrents bool
@@ -50,13 +52,14 @@ type rarbgClient struct {
 	lock             *sync.Mutex
 }
 
-func NewRARBGclient(opts RARBGclientOptions, cache Cache, logger *zap.Logger, logFoundTorrents bool) *rarbgClient {
+func NewRARBGclient(opts RARBGclientOptions, cache Cache, metaGetter MetaGetter, logger *zap.Logger, logFoundTorrents bool) *rarbgClient {
 	return &rarbgClient{
 		baseURL: opts.BaseURL,
 		httpClient: &http.Client{
 			Timeout: opts.Timeout,
 		},
 		cache:            cache,
+		metaGetter:		  metaGetter,
 		cacheAge:         opts.CacheAge,
 		logger:           logger,
 		logFoundTorrents: logFoundTorrents,
@@ -68,7 +71,18 @@ func NewRARBGclient(opts RARBGclientOptions, cache Cache, logger *zap.Logger, lo
 // FindMovie uses RARBG's API to find torrents for the given IMDb ID.
 // If no error occured, but there are just no torrents for the movie yet, an empty result and *no* error are returned.
 func (c *rarbgClient) FindMovie(ctx context.Context, imdbID string) ([]Result, error) {
-	escapedQuery := "search_imdb=" + imdbID
+	// Get movie name
+	meta, err := c.metaGetter.GetMovieSimple(ctx, imdbID)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't get movie name via Cinemeta for IMDb ID %v: %v", imdbID, err)
+	}
+	movieSearch := meta.Title
+	if meta.Year != 0 {
+		movieSearch += " " + strconv.Itoa(meta.Year)
+	}
+	movieSearch = url.PathEscape(movieSearch)
+
+	escapedQuery := "search_string=" + movieSearch
 	return c.find(ctx, imdbID, escapedQuery)
 }
 
@@ -80,13 +94,22 @@ func (c *rarbgClient) FindTVShow(ctx context.Context, imdbID string, season, epi
 	id := imdbID + ":" + seasonString + ":" + episodeString
 	// RARBG / torrentapi supports TV show search via IMDBb ID, even (and only) via the show's IMDb,
 	// AND allows us to additionally filter by name, so we can filter for the season + episode here! Nice!
-	if season < 10 {
-		seasonString = "0" + seasonString
+	// AM 210623 but this doesn't seem to work lol so let's just stick to using a search string
+	// if season < 10 {
+	// 	seasonString = "0" + seasonString
+	// }
+	// if episode < 10 {
+	// 	episodeString = "0" + episodeString
+	// }
+	// escapedQuery := "search_imdb=" + imdbID + "&search_string=S" + seasonString + "E" + episodeString
+
+	tvShowSearch, err := createTVShowSearch(ctx, c.metaGetter, imdbID, season, episode)
+	if err != nil {
+		return nil, err
 	}
-	if episode < 10 {
-		episodeString = "0" + episodeString
-	}
-	escapedQuery := "search_imdb=" + imdbID + "&search_string=S" + seasonString + "E" + episodeString
+	tvShowSearch = url.PathEscape(tvShowSearch)
+	escapedQuery := "search_string=" + tvShowSearch;
+
 	return c.find(ctx, id, escapedQuery)
 }
 
